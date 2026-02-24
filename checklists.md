@@ -28,7 +28,7 @@ Improving the quality of individual "Brains".
 ### 🧠 Brain 1: LLM (Logic & Code)
 - [x] **Fine-tuning**: Fine-tune CodeLlama/DeepSeek-Coder on a curated Manim dataset.
 - [x] **Self-Correction**: Implement a multi-turn "Compiler Loop" where the LLM fixes its own code based on Manim traceback errors.
-- [ ] **Multi-Scene Support**: Generate complex, multi-chapter animations with consistent variable naming.
+- [x] **Multi-Scene Support**: Generate complex, multi-chapter animations with consistent variable naming.
 
 ### 🎨 Brain 2: Diffusion (Aesthetics)
 - [x] **LoRA Training**: Train a LoRA for Stable Diffusion specific to "flat, educational illustration" styles.

@@ -40,6 +40,7 @@ class PipelineResult:
 
     concept: str
     generated_code: str = ""
+    generated_scenes: list[dict[str, str]] = field(default_factory=list) # List of {"description": ..., "code": ...}
     background_images: list[Image.Image] = field(default_factory=list)
     composited_frames: list[Image.Image] = field(default_factory=list)
     reward: RewardScore | None = None
@@ -200,15 +201,53 @@ class DualAnimatePipeline:
             logger.warning("⚠️ Embedding generation failed, continuing without: %s", e)
 
         # Step 2: LLM → Manim code (Brain 1: Logic)
-        try:
-            code = self.code_generator.generate_with_embedding(
-                concept=concept, embedding=embedding
-            )
-            result.generated_code = code
-            logger.info("✅ Manim code generated: %d chars", len(code))
-        except Exception as e:
-            logger.error("❌ Code generation failed: %s", e)
-            result.generated_code = f"# Code generation failed: {e}"
+        if self.config.llm.enable_multi_scene:
+            logger.info("分 Multi-scene mode enabled. Decomposing concept...")
+            try:
+                scene_descriptions = self.code_generator.decompose_concept(
+                    concept, max_scenes=self.config.llm.max_scenes
+                )
+                logger.info("Found %d chapters: %s", len(scene_descriptions), scene_descriptions)
+                
+                previous_context = ""
+                for i, desc in enumerate(scene_descriptions):
+                    logger.info("🎬 Generating Chapter %d/%d: %s", i+1, len(scene_descriptions), desc)
+                    code = self.code_generator.generate_scene_with_context(
+                        concept=concept,
+                        scene_description=desc,
+                        scene_index=i,
+                        total_scenes=len(scene_descriptions),
+                        previous_context=previous_context
+                    )
+                    result.generated_scenes.append({"description": desc, "code": code})
+                    # Use current code as context for next turn (simplified)
+                    previous_context += f"\nChapter {i+1} code summary:\n{code[:500]}..."
+                
+                # Combine codes for the final output or take the first/last? 
+                # For now, let's join them with comments
+                result.generated_code = "\n\n# " + "="*40 + "\n# MULTI-SCENE ANIMATION\n# " + "="*40 + "\n\n"
+                for i, s in enumerate(result.generated_scenes):
+                    result.generated_code += f"\n\n# CHAPTER {i+1}: {s['description']}\n{s['code']}\n"
+                
+            except Exception as e:
+                logger.error("❌ Multi-scene generation failed: %s", e)
+                result.generated_code = "" # Ensure it's empty to skip later steps
+        else:
+            try:
+                code = self.code_generator.generate_with_embedding(
+                    concept=concept, embedding=embedding
+                )
+                result.generated_code = code
+                logger.info("✅ Manim code generated: %d chars", len(code))
+            except Exception as e:
+                logger.error("❌ Code generation failed: %s", e)
+                result.generated_code = ""
+
+        # Early exit if we have no code to work with
+        if not result.generated_code:
+            logger.warning("⚠️ No code generated, skipping visual gen and reward scoring.")
+            self._save_outputs(result)
+            return result
 
         # Step 3: Diffusion → visual background (Brain 2: Aesthetics)
         try:

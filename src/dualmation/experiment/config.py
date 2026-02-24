@@ -52,6 +52,8 @@ class LLMConfig:
     lora: LoRAConfig = field(default_factory=LoRAConfig)
     enable_self_correction: bool = True
     max_correction_turns: int = 3
+    enable_multi_scene: bool = False
+    max_scenes: int = 5
 
 
 @dataclass

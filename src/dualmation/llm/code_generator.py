@@ -221,6 +221,93 @@ class ManimCodeGenerator:
         full_code = "from manim import *\n" + code.strip()
         return full_code
 
+    def decompose_concept(self, concept: str, max_scenes: int = 5) -> list[str]:
+        """Decompose a high-level concept into sequential animation scenes.
+
+        Args:
+            concept: The educational concept to decompose.
+            max_scenes: Maximum number of scenes to generate.
+
+        Returns:
+            List of scene descriptions (chapters).
+        """
+        prompt = f"""\
+You are an educational content designer. Break down the following concept into a sequence of at most {max_scenes} short animation scenes for Manim.
+Each scene should focus on a specific sub-topic and follow a logical progression.
+
+Concept: {concept}
+
+Output ONLY the scene descriptions as a bulleted list. No numbering, no preamble.
+"""
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+        outputs = self.model.generate(
+            **inputs,
+            max_new_tokens=512,
+            temperature=0.3, # Lower temperature for structured list
+            pad_token_id=self.tokenizer.pad_token_id,
+        )
+        
+        generated_text = self.tokenizer.decode(outputs[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
+        scenes = [s.strip("*- ").strip() for s in generated_text.strip().split("\n") if s.strip()]
+        
+        return scenes[:max_scenes]
+
+    @torch.inference_mode()
+    def generate_scene_with_context(
+        self,
+        concept: str,
+        scene_description: str,
+        scene_index: int,
+        total_scenes: int,
+        previous_context: str = "",
+        config: GenerationConfig | None = None,
+    ) -> str:
+        """Generate a Manim scene with awareness of previous scenes for consistency.
+
+        Args:
+            concept: The overall educational concept.
+            scene_description: The specific description for this chapter.
+            scene_index: Current scene index (0-based).
+            total_scenes: Total number of scenes in the sequence.
+            previous_context: Summary or code from previous scenes to maintain consistency.
+            config: Generation parameters.
+
+        Returns:
+            Generated Manim Python code.
+        """
+        if config is None:
+            config = GenerationConfig()
+
+        prompt_parts = [
+            MANIM_SYSTEM_PROMPT,
+            f"\nOverall Concept: {concept}",
+            f"Current Chapter ({scene_index+1}/{total_scenes}): {scene_description}",
+        ]
+        
+        if previous_context:
+            prompt_parts.append(f"\nContext from previous chapters (maintain consistent variable names and style):\n{previous_context}")
+            
+        prompt_parts.append("\n\n# Manim Scene Code:\nfrom manim import *\n")
+        prompt = "\n".join(prompt_parts)
+
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+        outputs = self.model.generate(
+            **inputs,
+            max_new_tokens=config.max_new_tokens,
+            temperature=config.temperature,
+            pad_token_id=self.tokenizer.pad_token_id,
+        )
+
+        generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
+        code = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
+
+        for stop_seq in config.stop_sequences:
+            if stop_seq in code:
+                code = code[: code.index(stop_seq)]
+
+        full_code = "from manim import *\n" + code.strip()
+        return full_code
+
     def generate_with_embedding(
         self,
         concept: str,
