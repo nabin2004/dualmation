@@ -54,6 +54,7 @@ class LLMConfig:
     max_correction_turns: int = 3
     enable_multi_scene: bool = False
     max_scenes: int = 5
+    use_theme_colors: bool = True
 
 
 @dataclass
@@ -66,6 +67,10 @@ class DiffusionConfig:
     height: int = 1080
     use_lora: bool = False
     lora: LoRAConfig = field(default_factory=LoRAConfig)
+    enable_video: bool = False
+    video_model_name: str = "stabilityai/stable-video-diffusion-img2vid-xt"
+    fps: int = 24
+    num_frames: int = 25
 
 
 @dataclass
