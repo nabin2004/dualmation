@@ -26,7 +26,7 @@ These items are necessary for the first end-to-end differentiable training run.
 Improving the quality of individual "Brains".
 
 ### 🧠 Brain 1: LLM (Logic & Code)
-- [ ] **Fine-tuning**: Fine-tune CodeLlama/DeepSeek-Coder on a curated Manim dataset.
+- [x] **Fine-tuning**: Fine-tune CodeLlama/DeepSeek-Coder on a curated Manim dataset.
 - [ ] **Self-Correction**: Implement a multi-turn "Compiler Loop" where the LLM fixes its own code based on Manim traceback errors.
 - [ ] **Multi-Scene Support**: Generate complex, multi-chapter animations with consistent variable naming.
 

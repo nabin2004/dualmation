@@ -19,6 +19,16 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class LoRAConfig:
+    """Configuration for Low-Rank Adaptation (LoRA)."""
+    r: int = 8
+    alpha: int = 16
+    target_modules: list[str] = field(default_factory=lambda: ["to_q", "to_k", "to_v", "to_out.0"])
+    dropout: float = 0.05
+    bias: str = "none"
+
+
+@dataclass
 class EmbeddingConfig:
     """Configuration for the embedding module."""
     code_model: str = "microsoft/codebert-base"
@@ -38,16 +48,8 @@ class LLMConfig:
     top_k: int = 50
     repetition_penalty: float = 1.1
     load_in_8bit: bool = False
-
-
-@dataclass
-class LoRAConfig:
-    """Configuration for Low-Rank Adaptation (LoRA)."""
-    r: int = 8
-    alpha: int = 16
-    target_modules: list[str] = field(default_factory=lambda: ["to_q", "to_k", "to_v", "to_out.0"])
-    dropout: float = 0.05
-    bias: str = "none"
+    use_lora: bool = False
+    lora: LoRAConfig = field(default_factory=LoRAConfig)
 
 
 @dataclass
