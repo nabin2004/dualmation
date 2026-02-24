@@ -1,0 +1,38 @@
+# DualAnimate Evaluation Configuration
+# For running evaluation / inference only (no training)
+
+experiment_name: dualmation_eval
+description: "Evaluation configuration with deterministic generation"
+seed: 42
+
+# ── LLM Code Generator ─────────────────────────────────────────
+llm:
+  model_name: codellama/CodeLlama-7b-hf
+  max_new_tokens: 2048    # Longer outputs for eval
+  temperature: 0.3        # Lower temperature for deterministic output
+  top_p: 0.85
+  top_k: 30
+  repetition_penalty: 1.2
+  load_in_8bit: false
+
+# ── Diffusion Visual Generator ─────────────────────────────────
+diffusion:
+  model_name: stabilityai/stable-diffusion-2-1
+  num_inference_steps: 50  # Higher quality for eval
+  guidance_scale: 9.0      # Stronger guidance
+  width: 1920
+  height: 1080
+
+# ── Training (not used in eval, included for completeness) ─────
+training:
+  batch_size: 1
+
+# ── Tracking ────────────────────────────────────────────────────
+use_tensorboard: true
+use_wandb: false
+output_dir: eval_results
+
+# ── Compute ─────────────────────────────────────────────────────
+device: auto
+num_workers: 2
+mixed_precision: false   # Full precision for evaluation

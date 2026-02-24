@@ -58,6 +58,10 @@ experiment = [
 Homepage = "https://github.com/nabin2004/dualmation"
 Repository = "https://github.com/nabin2004/dualmation"
 Issues = "https://github.com/nabin2004/dualmation/issues"
+Documentation = "https://github.com/nabin2004/dualmation/tree/master/docs"
+
+[project.scripts]
+dualmation = "dualmation.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

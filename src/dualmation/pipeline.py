@@ -2,7 +2,8 @@
 End-to-end DualAnimate pipeline orchestrator.
 
 Connects all modules: embeddings → LLM code gen → diffusion visual gen →
-compositor → reward scoring. Provides the full inference and training loop.
+compositor → reward scoring. Uses ExperimentConfig from configs/ for
+reproducible, configurable experiments.
 """
 
 from __future__ import annotations
@@ -15,36 +16,13 @@ import torch
 from PIL import Image
 
 from dualmation.compositor.compositor import AlphaCompositor, CompositeConfig
+from dualmation.experiment.config import ExperimentConfig, load_config
+from dualmation.experiment.reproducibility import set_seed, save_environment_snapshot
+from dualmation.experiment.logging_setup import setup_logging
+from dualmation.experiment.tracker import ExperimentTracker, TrackerConfig
 from dualmation.reward.reward_model import RewardConfig, RewardModel, RewardScore
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class PipelineConfig:
-    """Configuration for the full DualAnimate pipeline.
-
-    Attributes:
-        concept: The educational concept to animate.
-        llm_model: HuggingFace model ID for Manim code generation.
-        diffusion_model: HuggingFace model ID for visual background generation.
-        embedding_dim: Dimension of the shared multimodal embedding space.
-        output_dir: Directory to save generated outputs.
-        device: Compute device (auto-detected if None).
-        use_embeddings: Whether to use the multimodal embedding module.
-        composite_config: Alpha compositor configuration.
-        reward_config: Reward model configuration.
-    """
-
-    concept: str = "Explain gradient descent visually"
-    llm_model: str = "codellama/CodeLlama-7b-hf"
-    diffusion_model: str = "stabilityai/stable-diffusion-2-1"
-    embedding_dim: int = 512
-    output_dir: str = "outputs"
-    device: str | None = None
-    use_embeddings: bool = True
-    composite_config: CompositeConfig = field(default_factory=CompositeConfig)
-    reward_config: RewardConfig = field(default_factory=RewardConfig)
 
 
 @dataclass
@@ -79,21 +57,71 @@ class DualAnimatePipeline:
     5. Reward model scores the output
     6. (Training mode) RL feedback updates LLM and diffusion
 
+    The pipeline reads its configuration from ExperimentConfig (YAML files
+    in configs/) and integrates with the experiment tracking framework.
+
     Args:
-        config: Pipeline configuration.
+        config: ExperimentConfig loaded from YAML or constructed programmatically.
     """
 
-    def __init__(self, config: PipelineConfig) -> None:
+    def __init__(self, config: ExperimentConfig) -> None:
         self.config = config
-        self.device = config.device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = self._resolve_device(config.device)
+
+        # Set seed for reproducibility
+        set_seed(config.seed)
+
+        # Build sub-configs from ExperimentConfig
+        composite_cfg = CompositeConfig(
+            output_width=config.compositor.output_width,
+            output_height=config.compositor.output_height,
+            blend_mode=config.compositor.blend_mode,
+            background_opacity=config.compositor.background_opacity,
+            foreground_opacity=config.compositor.foreground_opacity,
+        )
+        reward_cfg = RewardConfig(
+            weight_alignment=config.reward.weight_alignment,
+            weight_visual=config.reward.weight_visual,
+            weight_compilation=config.reward.weight_compilation,
+        )
 
         # Modules are lazy-loaded to avoid loading everything at init
         self._code_encoder = None
         self._visual_encoder = None
         self._code_generator = None
         self._visual_generator = None
-        self._compositor = AlphaCompositor(config.composite_config)
-        self._reward_model = RewardModel(config.reward_config, device=self.device)
+        self._compositor = AlphaCompositor(composite_cfg)
+        self._reward_model = RewardModel(reward_cfg, device=self.device)
+
+        # Experiment tracker (optional)
+        self._tracker: ExperimentTracker | None = None
+
+    @staticmethod
+    def _resolve_device(device: str) -> str:
+        """Resolve 'auto' device to actual device string."""
+        if device == "auto":
+            return "cuda" if torch.cuda.is_available() else "cpu"
+        return device
+
+    @classmethod
+    def from_config_file(cls, config_path: str | Path, overrides: dict | None = None) -> DualAnimatePipeline:
+        """Create a pipeline from a YAML config file.
+
+        Args:
+            config_path: Path to YAML config file (e.g., configs/default.yaml).
+            overrides: Optional dict of overrides (supports dot notation).
+
+        Returns:
+            Configured DualAnimatePipeline instance.
+        """
+        config = load_config(config_path, overrides=overrides)
+        return cls(config)
+
+    def attach_tracker(self, tracker: ExperimentTracker) -> None:
+        """Attach an experiment tracker for logging metrics during runs."""
+        self._tracker = tracker
+
+    # ── Lazy-loaded modules ─────────────────────────────────────────
 
     @property
     def code_encoder(self):
@@ -102,7 +130,8 @@ class DualAnimatePipeline:
             from dualmation.embeddings.code_encoder import CodeEncoder
 
             self._code_encoder = CodeEncoder(
-                embedding_dim=self.config.embedding_dim
+                model_name=self.config.embedding.code_model,
+                embedding_dim=self.config.embedding.embedding_dim,
             ).to(self.device)
         return self._code_encoder
 
@@ -113,7 +142,8 @@ class DualAnimatePipeline:
             from dualmation.embeddings.visual_encoder import VisualEncoder
 
             self._visual_encoder = VisualEncoder(
-                embedding_dim=self.config.embedding_dim
+                model_name=self.config.embedding.visual_model,
+                embedding_dim=self.config.embedding.embedding_dim,
             ).to(self.device)
         return self._visual_encoder
 
@@ -124,7 +154,7 @@ class DualAnimatePipeline:
             from dualmation.llm.code_generator import ManimCodeGenerator
 
             self._code_generator = ManimCodeGenerator(
-                model_name=self.config.llm_model,
+                model_name=self.config.llm.model_name,
                 device=self.device,
             )
         return self._code_generator
@@ -136,10 +166,12 @@ class DualAnimatePipeline:
             from dualmation.diffusion.visual_generator import VisualGenerator
 
             self._visual_generator = VisualGenerator(
-                model_name=self.config.diffusion_model,
+                model_name=self.config.diffusion.model_name,
                 device=self.device,
             )
         return self._visual_generator
+
+    # ── Pipeline execution ──────────────────────────────────────────
 
     def run(self, concept: str | None = None) -> PipelineResult:
         """Execute the full pipeline for a concept.
@@ -150,20 +182,22 @@ class DualAnimatePipeline:
         Returns:
             PipelineResult with all generated artifacts and scores.
         """
-        concept = concept or self.config.concept
+        concept = concept or self.config.experiment_name
         result = PipelineResult(concept=concept)
 
         logger.info("🚀 Pipeline starting for concept: %s", concept)
+        logger.info("📋 Config: seed=%d, device=%s", self.config.seed, self.device)
 
         # Step 1: Generate concept embedding (optional)
         embedding = None
-        if self.config.use_embeddings:
-            try:
-                embedding = self.code_encoder.encode(concept)
-                result.concept_embedding = embedding
-                logger.info("✅ Concept embedding generated: shape=%s", embedding.shape)
-            except Exception as e:
-                logger.warning("⚠️ Embedding generation failed, continuing without: %s", e)
+        try:
+            embedding = self.code_encoder.encode(concept)
+            result.concept_embedding = embedding
+            logger.info("✅ Concept embedding generated: shape=%s", embedding.shape)
+            if self._tracker:
+                self._tracker.log_scalar("pipeline/embedding_norm", embedding.norm().item())
+        except Exception as e:
+            logger.warning("⚠️ Embedding generation failed, continuing without: %s", e)
 
         # Step 2: LLM → Manim code (Brain 1: Logic)
         try:
@@ -172,6 +206,9 @@ class DualAnimatePipeline:
             )
             result.generated_code = code
             logger.info("✅ Manim code generated: %d chars", len(code))
+            if self._tracker:
+                self._tracker.log_scalar("pipeline/code_length", len(code))
+                self._tracker.log_text("pipeline/generated_code", code)
         except Exception as e:
             logger.error("❌ Code generation failed: %s", e)
             result.generated_code = f"# Code generation failed: {e}"
@@ -183,12 +220,12 @@ class DualAnimatePipeline:
             )
             result.background_images = backgrounds
             logger.info("✅ Background generated: %d images", len(backgrounds))
+            if self._tracker and backgrounds:
+                self._tracker.log_image("pipeline/background", backgrounds[0])
         except Exception as e:
             logger.warning("⚠️ Background generation failed: %s", e)
 
         # Step 4: Compositor (if we have both layers)
-        # Note: In full production, Manim would render foreground frames first.
-        # Here we demonstrate the compositor with the diffusion output.
         if result.background_images:
             logger.info("✅ Compositor ready (awaiting Manim render for foreground)")
 
@@ -204,11 +241,16 @@ class DualAnimatePipeline:
             result.reward = reward
             logger.info(
                 "✅ Reward: total=%.3f (align=%.3f, visual=%.3f, compile=%.3f)",
-                reward.total,
-                reward.concept_alignment,
-                reward.visual_quality,
-                reward.compilation_success,
+                reward.total, reward.concept_alignment,
+                reward.visual_quality, reward.compilation_success,
             )
+            if self._tracker:
+                self._tracker.log_scalars("reward", {
+                    "total": reward.total,
+                    "alignment": reward.concept_alignment,
+                    "visual_quality": reward.visual_quality,
+                    "compilation": reward.compilation_success,
+                })
         except Exception as e:
             logger.warning("⚠️ Reward scoring failed: %s", e)
 
@@ -232,7 +274,6 @@ class DualAnimatePipeline:
         for i, img in enumerate(result.background_images):
             img_path = output_dir / f"background_{i:04d}.png"
             img.save(img_path)
-            logger.info("Saved background: %s", img_path)
 
         # Save composited frames
         for i, frame in enumerate(result.composited_frames):
@@ -250,48 +291,3 @@ class DualAnimatePipeline:
                 f"Compilation Success: {result.reward.compilation_success:.4f}\n"
                 f"Compilation Output: {result.reward.compilation_output}\n"
             )
-
-
-def main():
-    """CLI entry point for running the DualAnimate pipeline."""
-    import argparse
-
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s")
-
-    parser = argparse.ArgumentParser(description="DualAnimate Pipeline")
-    parser.add_argument(
-        "--concept",
-        type=str,
-        default="Explain gradient descent visually",
-        help="Concept to animate",
-    )
-    parser.add_argument("--output-dir", type=str, default="outputs")
-    parser.add_argument("--llm-model", type=str, default=PipelineConfig.llm_model)
-    parser.add_argument("--diffusion-model", type=str, default=PipelineConfig.diffusion_model)
-    parser.add_argument("--no-embeddings", action="store_true")
-
-    args = parser.parse_args()
-
-    config = PipelineConfig(
-        concept=args.concept,
-        llm_model=args.llm_model,
-        diffusion_model=args.diffusion_model,
-        output_dir=args.output_dir,
-        use_embeddings=not args.no_embeddings,
-    )
-
-    pipeline = DualAnimatePipeline(config)
-    result = pipeline.run()
-
-    print(f"\n{'='*60}")
-    print(f"DualAnimate Result for: {result.concept}")
-    print(f"{'='*60}")
-    print(f"Code length: {len(result.generated_code)} chars")
-    print(f"Backgrounds: {len(result.background_images)} images")
-    if result.reward:
-        print(f"Total reward: {result.reward.total:.4f}")
-    print(f"Outputs saved to: {config.output_dir}")
-
-
-if __name__ == "__main__":
-    main()
