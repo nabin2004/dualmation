@@ -11,7 +11,7 @@ These items are necessary for the first end-to-end differentiable training run.
 ### 🔄 Training Loop (`src/dualmation/training/`)
 - [x] **Data Loaders**: Implement loaders for `(concept, code, visual)` triplets.
 - [x] **PPO Trainer**: Implement the Proximal Policy Optimization loop for the LLM.
-- [ ] **GRPO Implementation**: Add Group Relative Policy Optimization (GRPO) for more stable RL training in math/logic tasks.
+- [x] **GRPO Implementation**: Add Group Relative Policy Optimization (GRPO) for more stable RL training in math/logic tasks.
 - [ ] **Differentiable Rewards**: Optimize the reward model to handle gradient pass-through where possible (e.g., embedding-based alignment).
 
 ### 🧪 Evaluation Suite (`src/dualmation/evaluation/`)
