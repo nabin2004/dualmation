@@ -200,7 +200,35 @@ class DualAnimatePipeline:
         except Exception as e:
             logger.warning("⚠️ Embedding generation failed, continuing without: %s", e)
 
-        # Step 2: LLM → Manim code (Brain 1: Logic)
+        # Step 2: Diffusion → visual background (Brain 2: Aesthetics)
+        # We generate this first if we need theme colors for the LLM
+        theme_palette_code = ""
+        try:
+            backgrounds = self.visual_generator.generate_with_embedding(
+                concept=concept, embedding=embedding
+            )
+            result.background_images = backgrounds
+            logger.info("✅ Background generated: %d images", len(backgrounds))
+            if self._tracker and backgrounds:
+                self._tracker.log_image("pipeline/background", backgrounds[0])
+            
+            if backgrounds and self.config.llm.use_theme_colors:
+                from dualmation.utils.colors import extract_palette, palette_to_manim_constants
+                palette = extract_palette(backgrounds[0])
+                theme_palette_code = palette_to_manim_constants(palette)
+                logger.info("🎨 Extracted theme palette: %s", palette)
+
+            # Optional: Generate Video Background
+            if backgrounds and self.config.diffusion.enable_video:
+                logger.info("🎞️ Generating video background (SVD)...")
+                video_frames = self.visual_generator.generate_video(backgrounds[0])
+                result.composited_frames = video_frames # Reuse composited_frames for background video for now
+                logger.info("✅ Video background generated: %d frames", len(video_frames))
+
+        except Exception as e:
+            logger.warning("⚠️ Background generation/video failed: %s", e)
+
+        # Step 3: LLM → Manim code (Brain 1: Logic)
         if self.config.llm.enable_multi_scene:
             logger.info("分 Multi-scene mode enabled. Decomposing concept...")
             try:
@@ -217,7 +245,8 @@ class DualAnimatePipeline:
                         scene_description=desc,
                         scene_index=i,
                         total_scenes=len(scene_descriptions),
-                        previous_context=previous_context
+                        previous_context=previous_context,
+                        theme_palette=theme_palette_code
                     )
                     result.generated_scenes.append({"description": desc, "code": code})
                     # Use current code as context for next turn (simplified)
@@ -235,7 +264,7 @@ class DualAnimatePipeline:
         else:
             try:
                 code = self.code_generator.generate_with_embedding(
-                    concept=concept, embedding=embedding
+                    concept=concept, embedding=embedding, theme_palette=theme_palette_code
                 )
                 result.generated_code = code
                 logger.info("✅ Manim code generated: %d chars", len(code))
@@ -248,18 +277,6 @@ class DualAnimatePipeline:
             logger.warning("⚠️ No code generated, skipping visual gen and reward scoring.")
             self._save_outputs(result)
             return result
-
-        # Step 3: Diffusion → visual background (Brain 2: Aesthetics)
-        try:
-            backgrounds = self.visual_generator.generate_with_embedding(
-                concept=concept, embedding=embedding
-            )
-            result.background_images = backgrounds
-            logger.info("✅ Background generated: %d images", len(backgrounds))
-            if self._tracker and backgrounds:
-                self._tracker.log_image("pipeline/background", backgrounds[0])
-        except Exception as e:
-            logger.warning("⚠️ Background generation failed: %s", e)
 
         # Step 4: Iterative Self-Correction (if enabled)
         max_turns = self.config.llm.max_correction_turns if self.config.llm.enable_self_correction else 0
