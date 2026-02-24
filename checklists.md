@@ -17,7 +17,7 @@ These items are necessary for the first end-to-end differentiable training run.
 ### 🧪 Evaluation Suite (`src/dualmation/evaluation/`)
 - [ ] **Benchmark Dataset**: Create a set of 100+ "Gold Standard" educational concepts with reference Manim code.
 - [ ] **Auto-Evaluation Script**: Batch process concepts and generate a full comparison report (LaTeX/PDF) using `MetricsCollector`.
-- [ ] **Human-in-the-loop (HITL)**: Basic UI/CLI for humans to rank animations to bootstrap the reward model.
+- [x] **Human-in-the-loop (HITL)**: Basic UI/CLI for humans to rank animations to bootstrap the reward model.
 
 ---
 

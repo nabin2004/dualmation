@@ -6,6 +6,7 @@ Provides subcommands:
     dualmation train     — Start training loop
     dualmation evaluate  — Evaluate a checkpoint
     dualmation config    — Manage experiment configs
+    dualmation annotate  — Human-in-the-loop ranking tool
     dualmation info      — System and environment info
 
 All commands respect YAML configs from configs/ and support CLI overrides.
@@ -33,6 +34,7 @@ Examples:
   dualmation run --concept "Explain gradient descent"
   dualmation run --config configs/default.yaml --concept "Linear algebra basics"
   dualmation train --config configs/training.yaml --epochs 50
+  dualmation annotate --sessions my_sessions.json
   dualmation config show configs/default.yaml
   dualmation info
         """,
@@ -147,6 +149,26 @@ Examples:
     diff_parser = config_subparsers.add_parser("diff", help="Compare two config files")
     diff_parser.add_argument("config_a", type=str)
     diff_parser.add_argument("config_b", type=str)
+
+    # ── annotate ──────────────────────────────────────────────────
+    annotate_parser = subparsers.add_parser("annotate", help="Human-in-the-loop candidate ranking")
+    annotate_parser.add_argument(
+        "--output", "-o",
+        type=str,
+        default="data/human_annotations.jsonl",
+        help="Path to save annotations",
+    )
+    annotate_parser.add_argument(
+        "--sessions", "-s",
+        type=str,
+        help="Path to JSON file containing sessions to rank (optional)",
+    )
+    annotate_parser.add_argument(
+        "--exp-dir",
+        type=str,
+        default="experiments",
+        help="Directory to scan for candidates to rank",
+    )
 
     # ── info ─────────────────────────────────────────────────────
     subparsers.add_parser("info", help="Show system and environment information")
@@ -314,6 +336,26 @@ def cmd_config(args: argparse.Namespace) -> None:
         print("Usage: dualmation config {show|init|diff}")
 
 
+def cmd_annotate(args: argparse.Namespace) -> None:
+    """Execute the 'annotate' subcommand."""
+    from dualmation.training.hitl import HumanAnnotator, collect_from_experiments
+
+    annotator = HumanAnnotator(annotation_file=args.output)
+    
+    if args.sessions:
+        with open(args.sessions, "r") as f:
+            sessions = json.load(f)
+    else:
+        print(f"🔍 Scanning {args.exp_dir} for candidates to rank...")
+        sessions = collect_from_experiments(args.exp_dir)
+    
+    if not sessions:
+        print(f"❌ No candidates found to rank in {args.exp_dir}.")
+        return
+
+    annotator.run_interactive(sessions)
+
+
 def cmd_info(args: argparse.Namespace) -> None:
     """Execute the 'info' subcommand."""
     from dualmation.experiment.reproducibility import get_system_info
@@ -376,6 +418,7 @@ def main() -> None:
         "train": cmd_train,
         "evaluate": cmd_evaluate,
         "config": cmd_config,
+        "annotate": cmd_annotate,
         "info": cmd_info,
     }
 
