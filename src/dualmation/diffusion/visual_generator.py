@@ -182,6 +182,50 @@ class VisualGenerator:
             frames.extend(frame)
         return frames
 
+    @torch.inference_mode()
+    def generate_video(
+        self,
+        image: Image.Image,
+        config: DiffusionConfig | None = None,
+        seed: int | None = None,
+    ) -> list[Image.Image]:
+        """Generate a video sequence from a static image using SVD.
+
+        Args:
+            image: Context image to animate.
+            config: Configuration (uses video_model_name, fps, num_frames).
+            seed: Random seed.
+
+        Returns:
+            List of PIL Images (frames).
+        """
+        from diffusers import StableVideoDiffusionPipeline
+        
+        # Load SVD pipe if not already loaded (lazy)
+        if not hasattr(self, "video_pipe"):
+            logger.info("Loading SVD video model...")
+            self.video_pipe = StableVideoDiffusionPipeline.from_pretrained(
+                "stabilityai/stable-video-diffusion-img2vid-xt",
+                torch_dtype=torch.float16,
+                variant="fp16"
+            )
+            self.video_pipe.enable_model_cpu_offload() # Save memory
+            
+        # Ensure image is resized to multiples of 8 or 64 as required by SVD
+        image = image.resize((1024, 576))
+        
+        generator = None
+        if seed is not None:
+            generator = torch.Generator(device=self.device).manual_seed(seed)
+
+        frames = self.video_pipe(
+            image,
+            decode_chunk_size=8,
+            generator=generator,
+        ).frames[0]
+        
+        return frames
+
     def save_images(
         self, images: list[Image.Image], output_dir: str | Path, prefix: str = "bg"
     ) -> list[Path]:

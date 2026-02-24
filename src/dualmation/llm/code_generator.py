@@ -27,6 +27,7 @@ Rules:
 4. Include smooth animations (Create, Write, Transform, FadeIn/Out).
 5. Add brief text labels for clarity.
 6. Output ONLY valid Python code — no markdown fences, no explanations.
+7. Use the provided THEME_ variables (if any) for colors to ensure style consistency.
 """
 
 
@@ -81,12 +82,13 @@ class ManimCodeGenerator:
         self.model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
         self.model.eval()
 
-    def _build_prompt(self, concept: str, additional_context: str = "") -> str:
+    def _build_prompt(self, concept: str, additional_context: str = "", theme_palette: str = "") -> str:
         """Build the full prompt for Manim code generation.
 
         Args:
             concept: The natural language concept description.
             additional_context: Optional additional context or constraints.
+            theme_palette: Optional Python code defining color constants.
 
         Returns:
             Formatted prompt string.
@@ -95,9 +97,13 @@ class ManimCodeGenerator:
             MANIM_SYSTEM_PROMPT,
             f"\nConcept: {concept}",
         ]
+        if theme_palette:
+            prompt_parts.append(f"\nColor Theme Variables (USE THESE):\n{theme_palette}")
+            
         if additional_context:
             prompt_parts.append(f"\nAdditional context: {additional_context}")
-        prompt_parts.append("\n\n# Manim Scene Code:\nfrom manim import *\n")
+            
+        prompt_parts.append("\n\n# Manim Scene Code:\nfrom manim import *\n" + theme_palette + "\n")
         return "\n".join(prompt_parts)
 
     @torch.inference_mode()
@@ -106,6 +112,7 @@ class ManimCodeGenerator:
         concept: str,
         config: GenerationConfig | None = None,
         additional_context: str = "",
+        theme_palette: str = "",
     ) -> str:
         """Generate Manim code for a given concept.
 
@@ -113,6 +120,7 @@ class ManimCodeGenerator:
             concept: Natural language description of the concept to animate.
             config: Generation hyperparameters. Uses defaults if None.
             additional_context: Optional extra instructions or constraints.
+            theme_palette: Optional Python code defining theme colors.
 
         Returns:
             Generated Manim Python code as a string.
@@ -120,7 +128,7 @@ class ManimCodeGenerator:
         if config is None:
             config = GenerationConfig()
 
-        prompt = self._build_prompt(concept, additional_context)
+        prompt = self._build_prompt(concept, additional_context, theme_palette)
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
         outputs = self.model.generate(
@@ -260,6 +268,7 @@ Output ONLY the scene descriptions as a bulleted list. No numbering, no preamble
         scene_index: int,
         total_scenes: int,
         previous_context: str = "",
+        theme_palette: str = "",
         config: GenerationConfig | None = None,
     ) -> str:
         """Generate a Manim scene with awareness of previous scenes for consistency.
@@ -270,6 +279,7 @@ Output ONLY the scene descriptions as a bulleted list. No numbering, no preamble
             scene_index: Current scene index (0-based).
             total_scenes: Total number of scenes in the sequence.
             previous_context: Summary or code from previous scenes to maintain consistency.
+            theme_palette: Optional color theme variables.
             config: Generation parameters.
 
         Returns:
@@ -284,10 +294,13 @@ Output ONLY the scene descriptions as a bulleted list. No numbering, no preamble
             f"Current Chapter ({scene_index+1}/{total_scenes}): {scene_description}",
         ]
         
+        if theme_palette:
+            prompt_parts.append(f"\nColor Theme Variables (USE THESE):\n{theme_palette}")
+
         if previous_context:
             prompt_parts.append(f"\nContext from previous chapters (maintain consistent variable names and style):\n{previous_context}")
             
-        prompt_parts.append("\n\n# Manim Scene Code:\nfrom manim import *\n")
+        prompt_parts.append("\n\n# Manim Scene Code:\nfrom manim import *\n" + theme_palette + "\n")
         prompt = "\n".join(prompt_parts)
 
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
@@ -312,6 +325,7 @@ Output ONLY the scene descriptions as a bulleted list. No numbering, no preamble
         self,
         concept: str,
         embedding: torch.Tensor | None = None,
+        theme_palette: str = "",
         config: GenerationConfig | None = None,
     ) -> str:
         """Generate Manim code, optionally conditioned on a shared embedding.
@@ -323,6 +337,7 @@ Output ONLY the scene descriptions as a bulleted list. No numbering, no preamble
         Args:
             concept: Concept description.
             embedding: Optional embedding tensor from the multimodal space.
+            theme_palette: Optional color theme variables.
             config: Generation config.
 
         Returns:
@@ -334,4 +349,4 @@ Output ONLY the scene descriptions as a bulleted list. No numbering, no preamble
             # For now, we note the conditioning in the context
             context = f"[Embedding-conditioned generation, dim={embedding.shape[-1]}]"
 
-        return self.generate(concept, config=config, additional_context=context)
+        return self.generate(concept, config=config, additional_context=context, theme_palette=theme_palette)
