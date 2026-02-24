@@ -1,0 +1,12 @@
+[
+    {
+        "concept": "The Pythagorean Theorem",
+        "description": "Visualize the squares on each side of a right-angled triangle to demonstrate a^2 + b^2 = c^2.",
+        "reference_code": "from manim import *\nclass Pythagoras(Scene):\n    def construct(self):\n        triangle = Polygon([0,0,0], [3,0,0], [3,4,0])\n        self.play(Create(triangle))"
+    },
+    {
+        "concept": "Binary Search",
+        "description": "Show an array being halved repeatedly to find a target value.",
+        "reference_code": "from manim import *\nclass BinarySearch(Scene):\n    def construct(self):\n        # ... reference implementation ..."
+    }
+]
