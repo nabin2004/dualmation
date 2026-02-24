@@ -15,8 +15,8 @@ These items are necessary for the first end-to-end differentiable training run.
 - [ ] **Differentiable Rewards**: Optimize the reward model to handle gradient pass-through where possible (e.g., embedding-based alignment).
 
 ### 🧪 Evaluation Suite (`src/dualmation/evaluation/`)
-- [ ] **Benchmark Dataset**: Create a set of 100+ "Gold Standard" educational concepts with reference Manim code.
-- [ ] **Auto-Evaluation Script**: Batch process concepts and generate a full comparison report (LaTeX/PDF) using `MetricsCollector`.
+- [x] **Benchmark Dataset**: Create a set of 100+ "Gold Standard" educational concepts with reference Manim code.
+- [x] **Auto-Evaluation Script**: Batch process concepts and generate a full comparison report (LaTeX/PDF) using `MetricsCollector`.
 - [x] **Human-in-the-loop (HITL)**: Basic UI/CLI for humans to rank animations to bootstrap the reward model.
 
 ---
@@ -32,8 +32,8 @@ Improving the quality of individual "Brains".
 
 ### 🎨 Brain 2: Diffusion (Aesthetics)
 - [x] **LoRA Training**: Train a LoRA for Stable Diffusion specific to "flat, educational illustration" styles.
-- [ ] **Video Consistency**: Use Video Diffusion (e.g., SVD) or ControlNet to make backgrounds dynamic rather than static images.
-- [ ] **Color Palette Sync**: Automatically extract colors from the diffusion background and inject them as theme variables into the Manim code.
+- [x] **Video Consistency**: Use Video Diffusion (e.g., SVD) or ControlNet to make backgrounds dynamic rather than static images.
+- [x] **Color Palette Sync**: Automatically extract colors from the diffusion background and inject them as theme variables into the Manim code.
 
 ---
 
