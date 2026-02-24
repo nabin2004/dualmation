@@ -52,6 +52,9 @@ class RewardConfig:
     weight_compilation: float = 0.3
     manim_timeout: int = 60  # seconds
     clip_model_name: str = "openai/clip-vit-base-patch32"
+    world_model_path: str | None = None # Path to .pt weights
+    world_model_threshold: float = 0.2  # Skip subprocess if below this
+    use_world_model_only: bool = False # For ultra-fast testing
 
 
 class RewardModel:
@@ -74,6 +77,23 @@ class RewardModel:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self._clip_model = None
         self._clip_processor = None
+        self._world_model = None
+        self._world_tokenizer = None
+        
+        if self.config.world_model_path:
+            self._load_world_model()
+
+    def _load_world_model(self) -> None:
+        """Load the ManimWorldModel fast proxy."""
+        from dualmation.reward.world_model import ManimWorldModel
+        from transformers import AutoTokenizer
+        
+        logger.info("Loading Manim World Model from %s", self.config.world_model_path)
+        self._world_tokenizer = AutoTokenizer.from_pretrained("microsoft/codebert-base")
+        self._world_model = ManimWorldModel()
+        self._world_model.load_state_dict(torch.load(self.config.world_model_path, map_location=self.device))
+        self._world_model.to(self.device)
+        self._world_model.eval()
 
     def _load_clip(self) -> None:
         """Lazy-load CLIP model for visual quality scoring."""
@@ -208,6 +228,17 @@ class RewardModel:
         Returns:
             Tuple of (score, compilation_output).
         """
+        # Fast-pass with World Model
+        if self._world_model:
+            prob = self._world_model.predict_code(code, self._world_tokenizer, self.device)
+            logger.debug("World Model predicted compilability: %.4f", prob)
+            
+            if self.config.use_world_model_only:
+                return prob, f"Predicted by World Model (proxy): {prob:.4f}"
+                
+            if prob < self.config.world_model_threshold:
+                return prob * 0.5, f"Skipped: World Model predicts failure (p={prob:.4f})"
+
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".py", delete=False, prefix="manim_test_"
         ) as f:

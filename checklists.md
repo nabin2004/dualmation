@@ -46,7 +46,7 @@ Long-term goals for publishing in conferences (CVPR, NeurIPS, ICML).
 - [ ] **Cross-Modal Retrieval**: Build a feature where a user can upload a sketch, and the system retrieves/generates related Manim code.
 
 ### 🤖 RL with World Models
-- [ ] **World Model Integration**: Train a world model that predicts Manim "compilability" to speed up the RL loop (acting as a proxy for the slow subprocess call).
+- [x] **World Model Integration**: Train a world model that predicts Manim "compilability" to speed up the RL loop (acting as a proxy for the slow subprocess call).
 - [ ] **Multi-Reward Fusion**: Use Pareto optimization to balance "Aesthetics" vs "Accuracy" vs "Complexity".
 
 ---
