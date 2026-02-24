@@ -31,7 +31,7 @@ Improving the quality of individual "Brains".
 - [ ] **Multi-Scene Support**: Generate complex, multi-chapter animations with consistent variable naming.
 
 ### 🎨 Brain 2: Diffusion (Aesthetics)
-- [ ] **LoRA Training**: Train a LoRA for Stable Diffusion specific to "flat, educational illustration" styles.
+- [x] **LoRA Training**: Train a LoRA for Stable Diffusion specific to "flat, educational illustration" styles.
 - [ ] **Video Consistency**: Use Video Diffusion (e.g., SVD) or ControlNet to make backgrounds dynamic rather than static images.
 - [ ] **Color Palette Sync**: Automatically extract colors from the diffusion background and inject them as theme variables into the Manim code.
 

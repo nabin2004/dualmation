@@ -41,6 +41,16 @@ class LLMConfig:
 
 
 @dataclass
+class LoRAConfig:
+    """Configuration for Low-Rank Adaptation (LoRA)."""
+    r: int = 8
+    alpha: int = 16
+    target_modules: list[str] = field(default_factory=lambda: ["to_q", "to_k", "to_v", "to_out.0"])
+    dropout: float = 0.05
+    bias: str = "none"
+
+
+@dataclass
 class DiffusionConfig:
     """Configuration for the diffusion visual generation module."""
     model_name: str = "stabilityai/stable-diffusion-2-1"
@@ -48,6 +58,8 @@ class DiffusionConfig:
     guidance_scale: float = 7.5
     width: int = 1920
     height: int = 1080
+    use_lora: bool = False
+    lora: LoRAConfig = field(default_factory=LoRAConfig)
 
 
 @dataclass

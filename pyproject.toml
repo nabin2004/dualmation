@@ -35,6 +35,7 @@ dependencies = [
     "Pillow>=10.0.0",
     "numpy>=1.24.0",
     "trl>=0.7.0",
+    "peft>=0.7.0",
     "manim>=0.18.0",
     "pydantic>=2.0.0",
     "tensorboard>=2.14.0",
