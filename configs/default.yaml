@@ -1,0 +1,75 @@
+# DualAnimate Default Experiment Configuration
+# Override values via CLI or by creating experiment-specific YAML files.
+
+experiment_name: dualmation_default
+description: "Default configuration for DualAnimate experiments"
+seed: 42
+
+# ── Embedding Module ────────────────────────────────────────────
+embedding:
+  code_model: microsoft/codebert-base
+  visual_model: google/vit-base-patch16-224
+  embedding_dim: 512
+  freeze_backbone: true
+  contrastive_temperature: 0.07
+
+# ── LLM Code Generator ─────────────────────────────────────────
+llm:
+  model_name: codellama/CodeLlama-7b-hf
+  max_new_tokens: 1024
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+  repetition_penalty: 1.1
+  load_in_8bit: false
+
+# ── Diffusion Visual Generator ─────────────────────────────────
+diffusion:
+  model_name: stabilityai/stable-diffusion-2-1
+  num_inference_steps: 30
+  guidance_scale: 7.5
+  width: 1920
+  height: 1080
+
+# ── Compositor ──────────────────────────────────────────────────
+compositor:
+  output_width: 1920
+  output_height: 1080
+  blend_mode: alpha
+  background_opacity: 1.0
+  foreground_opacity: 1.0
+
+# ── Reward Model ────────────────────────────────────────────────
+reward:
+  weight_alignment: 0.4
+  weight_visual: 0.3
+  weight_compilation: 0.3
+  clip_model_name: openai/clip-vit-base-patch32
+  manim_timeout: 60
+
+# ── Training ────────────────────────────────────────────────────
+training:
+  learning_rate: 1e-4
+  batch_size: 8
+  num_epochs: 100
+  warmup_steps: 500
+  weight_decay: 0.01
+  gradient_clip_norm: 1.0
+  eval_interval: 100
+  save_interval: 500
+  rl_algorithm: ppo
+  rl_clip_range: 0.2
+  rl_kl_coeff: 0.1
+
+# ── Experiment Tracking ─────────────────────────────────────────
+use_tensorboard: true
+use_wandb: false
+wandb_project: dualmation
+output_dir: experiments
+data_dir: data
+checkpoint_dir: checkpoints
+
+# ── Compute ─────────────────────────────────────────────────────
+device: auto
+num_workers: 4
+mixed_precision: true

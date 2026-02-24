@@ -37,6 +37,10 @@ dependencies = [
     "trl>=0.7.0",
     "manim>=0.18.0",
     "pydantic>=2.0.0",
+    "tensorboard>=2.14.0",
+    "omegaconf>=2.3.0",
+    "matplotlib>=3.8.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +49,9 @@ dev = [
     "pytest-cov>=4.1.0",
     "ruff>=0.1.0",
     "mypy>=1.7.0",
+]
+experiment = [
+    "wandb>=0.16.0",
 ]
 
 [project.urls]
