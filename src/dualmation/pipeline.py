@@ -206,9 +206,6 @@ class DualAnimatePipeline:
             )
             result.generated_code = code
             logger.info("✅ Manim code generated: %d chars", len(code))
-            if self._tracker:
-                self._tracker.log_scalar("pipeline/code_length", len(code))
-                self._tracker.log_text("pipeline/generated_code", code)
         except Exception as e:
             logger.error("❌ Code generation failed: %s", e)
             result.generated_code = f"# Code generation failed: {e}"
@@ -225,34 +222,55 @@ class DualAnimatePipeline:
         except Exception as e:
             logger.warning("⚠️ Background generation failed: %s", e)
 
-        # Step 4: Compositor (if we have both layers)
-        if result.background_images:
-            logger.info("✅ Compositor ready (awaiting Manim render for foreground)")
+        # Step 4: Iterative Self-Correction (if enabled)
+        max_turns = self.config.llm.max_correction_turns if self.config.llm.enable_self_correction else 0
+        current_turn = 0
+        
+        while True:
+            # Step 5: Reward scoring
+            try:
+                visual = result.background_images[0] if result.background_images else None
+                reward = self._reward_model.score(
+                    code=result.generated_code,
+                    visual=visual,
+                    concept=concept,
+                    concept_embedding=embedding,
+                )
+                result.reward = reward
+                
+                # Check for success or if we should retry
+                if reward.compilation_success >= 1.0 or current_turn >= max_turns:
+                    if reward.compilation_success >= 1.0:
+                        logger.info("✅ Reward: total=%.3f (compilation success on turn %d)", reward.total, current_turn)
+                    else:
+                        logger.warning("⚠️ Max correction turns reached (%d). Final score: %.3f", max_turns, reward.total)
+                    break
+                
+                # Retry: generate correction
+                current_turn += 1
+                logger.info("🔄 Self-correction turn %d: fixing code based on error...", current_turn)
+                logger.debug("Error: %s", reward.compilation_output)
+                
+                result.generated_code = self.code_generator.generate_correction(
+                    concept=concept,
+                    original_code=result.generated_code,
+                    error_message=reward.compilation_output,
+                )
+                
+            except Exception as e:
+                logger.warning("⚠️ Reward scoring/correction failed: %s", e)
+                break
 
-        # Step 5: Reward scoring
-        try:
-            visual = result.background_images[0] if result.background_images else None
-            reward = self._reward_model.score(
-                code=result.generated_code,
-                visual=visual,
-                concept=concept,
-                concept_embedding=embedding,
-            )
-            result.reward = reward
-            logger.info(
-                "✅ Reward: total=%.3f (align=%.3f, visual=%.3f, compile=%.3f)",
-                reward.total, reward.concept_alignment,
-                reward.visual_quality, reward.compilation_success,
-            )
-            if self._tracker:
+        if self._tracker:
+            self._tracker.log_scalar("pipeline/code_length", len(result.generated_code))
+            self._tracker.log_text("pipeline/generated_code", result.generated_code)
+            if result.reward:
                 self._tracker.log_scalars("reward", {
-                    "total": reward.total,
-                    "alignment": reward.concept_alignment,
-                    "visual_quality": reward.visual_quality,
-                    "compilation": reward.compilation_success,
+                    "total": result.reward.total,
+                    "alignment": result.reward.concept_alignment,
+                    "visual_quality": result.reward.visual_quality,
+                    "compilation": result.reward.compilation_success,
                 })
-        except Exception as e:
-            logger.warning("⚠️ Reward scoring failed: %s", e)
 
         # Save outputs
         self._save_outputs(result)

@@ -50,6 +50,8 @@ class LLMConfig:
     load_in_8bit: bool = False
     use_lora: bool = False
     lora: LoRAConfig = field(default_factory=LoRAConfig)
+    enable_self_correction: bool = True
+    max_correction_turns: int = 3
 
 
 @dataclass

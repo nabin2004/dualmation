@@ -147,6 +147,80 @@ class ManimCodeGenerator:
         full_code = "from manim import *\n" + code.strip()
         return full_code
 
+    def _build_correction_prompt(self, concept: str, original_code: str, error_message: str) -> str:
+        """Build a prompt for correcting Manim code based on an error message.
+
+        Args:
+            concept: The original concept description.
+            original_code: The code that failed to run.
+            error_message: The traceback or error message from the Manim renderer.
+
+        Returns:
+            Formatted correction prompt.
+        """
+        prompt_parts = [
+            MANIM_SYSTEM_PROMPT,
+            f"\nOriginal Concept: {concept}",
+            "\nPreviously generated code that failed:",
+            "```python",
+            original_code,
+            "```",
+            f"\nError encountered during rendering:\n{error_message}",
+            "\nInstructions:",
+            "1. Analyze the error above.",
+            "2. Fix the bug in the Manim code.",
+            "3. Ensure the scene still correctly visualizes the concept.",
+            "4. Output ONLY the complete, fixed Python code.",
+            "\nFixed Manim Scene Code:\nfrom manim import *\n",
+        ]
+        return "\n".join(prompt_parts)
+
+    @torch.inference_mode()
+    def generate_correction(
+        self,
+        concept: str,
+        original_code: str,
+        error_message: str,
+        config: GenerationConfig | None = None,
+    ) -> str:
+        """Generate a corrected version of Manim code based on an error message.
+
+        Args:
+            concept: Original concept description.
+            original_code: Previous code that failed.
+            error_message: Traceback or error description.
+            config: Generation parameters.
+
+        Returns:
+            Corrected Manim Python code.
+        """
+        if config is None:
+            config = GenerationConfig()
+
+        prompt = self._build_correction_prompt(concept, original_code, error_message)
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+
+        outputs = self.model.generate(
+            **inputs,
+            max_new_tokens=config.max_new_tokens,
+            temperature=config.temperature,
+            top_p=config.top_p,
+            top_k=config.top_k,
+            do_sample=config.do_sample,
+            repetition_penalty=config.repetition_penalty,
+            pad_token_id=self.tokenizer.pad_token_id,
+        )
+
+        generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
+        code = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
+
+        for stop_seq in config.stop_sequences:
+            if stop_seq in code:
+                code = code[: code.index(stop_seq)]
+
+        full_code = "from manim import *\n" + code.strip()
+        return full_code
+
     def generate_with_embedding(
         self,
         concept: str,
