@@ -60,8 +60,7 @@ typecheck: ## Run type checker (mypy)
 # ── Pipeline Commands ───────────────────────────────────────────
 
 run: ## Run the pipeline (use CONFIG=... CONCEPT=...)
-	PYTHONPATH=src $(PYTHON) -m dualmation.cli run \
-		--config $(CONFIG) \
+	PYTHONPATH=src $(PYTHON) -m dualmation.cli --config $(CONFIG) run \
 		--concept $(CONCEPT) \
 		--seed $(SEED)
 
